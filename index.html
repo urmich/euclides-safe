@@ -165,6 +165,73 @@
   }
   .diagram svg { max-width: 100%; height: auto; }
 
+  .diagram-note {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: .78rem;
+    margin: -10px auto 16px;
+    opacity: .85;
+  }
+
+  /* Level selection */
+  .level-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-top: 22px;
+  }
+  .level-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 16px;
+    padding: 18px 8px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform .12s, border-color .12s, background .12s;
+  }
+  .level-btn:hover { border-color: var(--cyan); transform: translateY(-3px); background: var(--panel); }
+  .level-btn .lv-num { font-size: 1.15rem; font-weight: 900; color: var(--cyan); }
+  .level-btn .lv-grade { font-size: .8rem; color: var(--text-dim); font-weight: 700; }
+
+  /* Room 5 — true/false list */
+  .r5-list { display: grid; gap: 10px; margin: 18px 0 20px; }
+  .r5-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 16px;
+    flex-wrap: wrap;
+  }
+  .r5-text { font-weight: 600; line-height: 1.5; flex: 1; min-width: 200px; }
+  .r5-btns { display: flex; gap: 8px; flex-shrink: 0; }
+  .r5-tf {
+    background: #0c1119;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 9px 16px;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: .92rem;
+    cursor: pointer;
+    transition: transform .1s, border-color .1s, background .1s;
+  }
+  .r5-tf:hover:not(:disabled) { border-color: var(--cyan); transform: translateY(-1px); }
+  .r5-tf.sel { background: rgba(56,225,255,.18); border-color: var(--cyan); color: var(--cyan); }
+  .r5-tf:disabled { cursor: default; opacity: .85; }
+  .r5-star { font-size: 1.15rem; font-weight: 900; margin-inline-start: 6px; }
+  .r5-star.ok { color: var(--green); text-shadow: 0 0 8px rgba(43,255,136,.7); }
+  .r5-star.bad { color: var(--red); text-shadow: 0 0 8px rgba(255,77,109,.6); }
+
   .question {
     font-size: 1.15rem;
     font-weight: 700;
@@ -510,114 +577,142 @@
    ========================================================================= */
 
 const STORAGE_KEY = "euclid_safe_v1";
+const VARIANT_KEY = "euclid_safe_variants_v1"; // persists last-used variant per room (across plays)
 
-const FINAL_CODE = "65734875";
+// Grade label per level (for the level-selection screen).
+const LEVEL_GRADES = { 1: "כיתה ח'", 2: "כיתה ח'", 3: "כיתה ט'", 4: "כיתה י'", 5: "כיתה י'" };
 
 // ---- Game data ------------------------------------------------------------
+// Each room has fixed structure / relation / numeric questions plus 5 numeric
+// variants. On every play one variant is chosen at random and never repeats the
+// variant used in the previous play (persisted in VARIANT_KEY).
 const ROOMS = [
   {
     id: 1,
     title: "חדר 1: \"חדר המראות\"",
-    sub: "רמת קושי: קל",
+    sub: "רמה 1 · כיתה ח'",
     svg: "room1",
-    answer: 65,
-    phase1: {
-      q: "זהו את המבנה הגיאומטרי שעל קיר הלייזרים:",
-      options: ["ישרים מקבילים", "שני ישרים נחתכים", "משולש שווה שוקיים", "מצולע משוכלל"],
-      correct: 1,
-    },
-    phase2: {
-      q: "מהו הקשר הגיאומטרי בין הזווית הנתונה לזווית החסרה?",
-      options: ["זוויות קודקודיות שוות זו לזו", "זוויות צמודות משלימות ל-180 מעלות", "סכום הזוויות במשולש הוא 180 מעלות"],
-      correct: 1,
-    },
-    phase3: { q: "הזינו את קוד הדלת (הזווית החסרה):" },
-    hint: "נסו לחסר את הזווית הנתונה (115°) מ-180 מעלות.",
+    structureQ: "זהו את המבנה הגיאומטרי שעל קיר הלייזרים:",
+    structureOptions: ["ישרים מקבילים", "ישרים נחתכים", "אלכסונים", "שני משולשים שווי שוקיים"],
+    structureCorrect: 1,
+    relationQ: "מהו הקשר הגיאומטרי בין הזווית הנתונה לזווית החסרה?",
+    relationOptions: ["זוויות קודקודיות", "זוויות צמודות", "זוויות מתחלפות"],
+    numericQ: "הזינו את קוד הדלת (גודל הזווית החסרה):",
+    variants: [
+      { given: 115, relation: "adjacent", relCorrect: 1, answer: 65 },
+      { given: 122, relation: "vertical", relCorrect: 0, answer: 122 },
+      { given: 138, relation: "adjacent", relCorrect: 1, answer: 42 },
+      { given: 105, relation: "vertical", relCorrect: 0, answer: 105 },
+      { given: 128, relation: "adjacent", relCorrect: 1, answer: 52 },
+    ],
   },
   {
     id: 2,
     title: "חדר 2: \"מסדרון המקבילים\"",
-    sub: "רמת קושי: בינוני",
+    sub: "רמה 2 · כיתה ח'",
     svg: "room2",
-    answer: 73,
-    phase1: {
-      q: "זהו את המבנה הגיאומטרי המוצג במסילה:",
-      options: ["ישרים מקבילים וישר חותך", "משולשים חופפים", "אנך אמצעי", "טרפז שווה שוקיים"],
-      correct: 0,
-    },
-    phase2: {
-      q: "איזה משפט גיאומטרי מגדיר את היחס בין הזוויות?",
-      options: ["זוויות חד-צדדיות פנימיות משלימות ל-180 מעלות", "בין ישרים מקבילים, זוויות מתאימות שוות זו לזו", "זוויות מתחלפות משלימות ל-180 מעלות"],
-      correct: 1,
-    },
-    phase3: { q: "חשבו את גודל הזווית החסרה להרמת המחסום:" },
-    hint: "זוויות מתאימות בין מקבילים שוות — הזווית החסרה זהה לזווית הנתונה (73°).",
+    structureQ: "זהו את המבנה הגיאומטרי המוצג במסילה:",
+    structureOptions: ["ישרים מקבילים וישר חותך", "מקבילית", "קווים נחתכים", "טרפז"],
+    structureCorrect: 0,
+    relationQ: "איזה משפט גיאומטרי מגדיר את היחס בין הזוויות?",
+    relationOptions: [
+      "בין ישרים מקבילים, זוויות מתאימות שוות זו לזו",
+      "בין ישרים מקבילים, זוויות מתחלפות שוות זו לזו",
+      "בין ישרים מקבילים, זוויות חד-צדדיות משלימות ל-180°",
+    ],
+    numericQ: "חשבו את גודל הזווית החסרה להרמת המחסום:",
+    variants: [
+      { given: 73, relation: "corresponding", relCorrect: 0, answer: 73 },
+      { given: 68, relation: "alternate", relCorrect: 1, answer: 68 },
+      { given: 110, relation: "cointerior", relCorrect: 2, answer: 70 },
+      { given: 122, relation: "corresponding", relCorrect: 0, answer: 122 },
+      { given: 55, relation: "alternate", relCorrect: 1, answer: 55 },
+    ],
   },
   {
     id: 3,
     title: "חדר 3: \"הגשר המשולש\"",
-    sub: "רמת קושי: בינוני-גבוה",
+    sub: "רמה 3 · כיתה ט'",
     svg: "room3",
-    answer: 48,
-    phase1: {
-      q: "זהו את הקשר הגיאומטרי בין שני חלקי הגשר:",
-      options: ["משולשים דומים", "משולשים ישרי זווית", "משולשים חופפים לפי צלע-זווית-צלע", "משולשים שווי שוקיים"],
-      correct: 2,
-    },
-    phase2: {
-      q: "מדוע הזווית המבוקשת שווה לזווית הנתונה?",
-      options: ["במשולשים חופפים, מול צלעות שוות מונחות זוויות מתאימות שוות", "סכום הזוויות בכל משולש הוא קבוע", "הן זוויות קודקודיות בין שני משולשים"],
-      correct: 0,
-    },
-    phase3: { q: "הזינו את קוד פריצת הגשר (ערך הזווית החסרה):" },
-    hint: "המשולשים חופפים (צ.ז.צ). הזווית המתאימה שווה לזווית הנתונה (48°).",
+    structureQ: "זהו את הקשר הגיאומטרי בין שני חלקי הגשר:",
+    structureOptions: ["משולשים דומים", "משולשים ישרי זווית", "משולשים חופפים לפי ז.צ.ז", "משולשים שווי שוקיים"],
+    structureCorrect: 2,
+    relationQ: "מדוע הזווית המבוקשת שווה לזווית הנתונה?",
+    relationOptions: [
+      "במשולשים חופפים, זוויות מתאימות שוות זו לזו",
+      "סכום זוויות בכל משולש זהה ושווה ל-180 מעלות",
+      "הן זוויות קודקודיות בין שני המשולשים",
+    ],
+    relationCorrect: 0,
+    numericQ: "הזינו את קוד פריצת הגשר (גודל הזווית החסרה):",
+    variants: [
+      { given: 48, answer: 48 },
+      { given: 53, answer: 53 },
+      { given: 62, answer: 62 },
+      { given: 57, answer: 57 },
+      { given: 44, answer: 44 },
+    ],
   },
   {
     id: 4,
     title: "חדר 4: \"מגדל הצללים\"",
-    sub: "רמת קושי: גבוה",
+    sub: "רמה 4 · כיתה י'",
     svg: "room4",
-    answer: 75,
-    phase1: {
-      q: "מהו היחס הגיאומטרי בין המשולש הקטן למשולש הגדול?",
-      options: ["המשולשים חופפים לחלוטין", "המשולשים דומים", "אין קשר מתמטי בין המשולשים", "המשולשים שווי צלעות"],
-      correct: 1,
-    },
-    phase2: {
-      q: "איזה שילוב משפטים מאפשר למצוא את הזווית החסרה במגדל?",
-      options: ["משפט פיתגורס ודמיון צלעות", "יחס הדמיון בריבוע שווה ליחס השטחים", "במשולשים דומים זוויות מתאימות שוות + סכום זוויות במשולש הוא 180"],
-      correct: 2,
-    },
-    phase3: { q: "חשבו את הזווית החסרה בראש המגדל לפתיחת השער:" },
-    hint: "במשולש דומה הזוויות זהות. 180 − 40 − 65 = ?",
+    structureQ: "מהו היחס הגיאומטרי בין המשולש הקטן למשולש הגדול?",
+    structureOptions: ["המשולשים חופפים", "המשולשים דומים", "אין קשר מתמטי בין המשולשים", "המשולשים שווי צלעות"],
+    structureCorrect: 1,
+    relationQ: "איזה שילוב משפטים מאפשר למצוא את הזווית החסרה במגדל?",
+    relationOptions: [
+      "משפט פיתגורס + במשולשים דומים זוויות מתאימות שוות",
+      "במשולשים דומים זוויות מתאימות שוות + במשולשים דומים יחס צלעות מתאימות שווה",
+      "במשולשים דומים זוויות מתאימות שוות + סכום הזוויות במשולש הוא 180°",
+    ],
+    relationCorrect: 2,
+    numericQ: "חשבו את הזווית החסרה בראש המגדל לפתיחת השער:",
+    variants: [
+      { a: 65, b: 40, answer: 75 },
+      { a: 70, b: 55, answer: 55 },
+      { a: 60, b: 50, answer: 70 },
+      { a: 80, b: 45, answer: 55 },
+      { a: 72, b: 38, answer: 70 },
+    ],
   },
 ];
 
-// Room 5 — error lab (single MC)
+// Room 5 — "מבוך הצורות הגיאומטריות": mark each statement true / false.
 const ROOM5 = {
-  title: "חדר 5: \"מעבדת הטעויות\"",
-  sub: "רמת קושי: אתגר וחשיבה ביקורתית",
-  scientist: "\"המשולש הקטן והמשולש הגדול מהחדר הקודם הם משולשים דומים. מכיוון שהם דומים, נובע מכך שכל הצלעות המתאימות שלהם שוות זו לזו.\"",
-  q: "זהו את הטעות הלוגית ובחרו את התיקון המדעי הנכון:",
-  options: [
-    "המדען צודק לחלוטין, דמיון משולשים גורר שוויון מלא של כל הצלעות.",
-    "טעות! במשולשים דומים הזוויות המתאימות שוות, אך הצלעות אינן בהכרח שוות אלא שומרות על יחס קבוע (פרופורציה).",
-    "טעות! במשולשים דומים גם הזוויות וגם הצלעות שונות לחלוטין ואין ביניהן שום קשר מספרי.",
+  title: "חדר 5: \"מבוך הצורות הגיאומטריות\"",
+  sub: "רמה 5 · כיתה י'",
+  intro: "סמנו לכל טענה אם היא נכונה או לא נכונה. הבדיקה תתבצע רק לאחר סימון כל הטענות. רק שילוב נכון לחלוטין יפרוץ את הכספת.",
+  statements: [
+    { t: "במלבן כל הצלעות שוות", correct: false },
+    { t: "במשולשים דומים, כל הצלעות שוות", correct: false },
+    { t: "במשולשים דומים כל הזוויות שוות", correct: true },
+    { t: "במשולשים חופפים, היחס בין הצלעות המתאימות הוא 1:1", correct: true },
+    { t: "במעוין, האלכסונים שווים זה לזה", correct: false },
+    { t: "במקבילית, האלכסונים חוצים זה את זה", correct: true },
+    { t: "במעוין, האלכסון הגדול חוצה את הקטן ויוצר איתו זווית ישרה", correct: true },
   ],
-  correct: 1,
-  hint: "דמיון שומר על יחס בין הצלעות (פרופורציה), לא על שוויון מלא של הצלעות.",
 };
 
 // ---- State ----------------------------------------------------------------
-let state = {
-  currentRoom: 0,      // 0 intro, 1-5 puzzle rooms, 6 keypad/finish
-  currentPhase: 1,     // 1-3 within a room
-  collectedCodes: [],  // 4 numeric answers
-  elapsed: 0,          // seconds
-  wrongAttempts: 0,    // consecutive wrong in current room
-  finished: false,
-  finalTime: 0,
-};
+function freshState() {
+  return {
+    currentRoom: 0,      // 0 intro, 1-5 puzzle rooms
+    currentPhase: 1,     // 1-3 within a room
+    collectedCodes: [],  // numeric answers per room
+    elapsed: 0,          // seconds
+    wrongAttempts: 0,    // consecutive wrong in current room
+    finished: false,
+    finalTime: 0,
+    startLevel: 1,       // level the player chose to start from
+    variants: {},        // roomId -> chosen variant index for this play
+    room5Sel: [],        // player's true/false marks (bool|null)
+    room5Revealed: false,
+    room5Attempts: 0,
+  };
+}
+let state = freshState();
 
 let timerInterval = null;
 
@@ -633,6 +728,55 @@ function load() {
       if (parsed && typeof parsed === "object") state = Object.assign(state, parsed);
     }
   } catch (e) {}
+}
+
+// ---- Variant selection (no repeat between consecutive plays) ---------------
+function loadVarHistory() {
+  try { return JSON.parse(localStorage.getItem(VARIANT_KEY)) || {}; }
+  catch (e) { return {}; }
+}
+function saveVarHistory(h) {
+  try { localStorage.setItem(VARIANT_KEY, JSON.stringify(h)); } catch (e) {}
+}
+// Returns the chosen variant for a room, picking a fresh one (avoiding the
+// previous play's variant) the first time the room is entered in this play.
+function ensureVariant(roomId) {
+  if (!state.variants) state.variants = {};
+  if (state.variants[roomId] != null) return state.variants[roomId];
+  const room = ROOMS[roomId - 1];
+  const n = room.variants.length;
+  const hist = loadVarHistory();
+  const last = hist[roomId];
+  let idx = Math.floor(Math.random() * n);
+  if (n > 1 && idx === last) idx = (idx + 1) % n; // never repeat consecutive play
+  state.variants[roomId] = idx;
+  hist[roomId] = idx;
+  saveVarHistory(hist);
+  save();
+  return idx;
+}
+function curVariant(roomId) {
+  return ROOMS[roomId - 1].variants[ensureVariant(roomId)];
+}
+// Builds a variant-aware hint for a puzzle room.
+function roomHint(roomId) {
+  const v = curVariant(roomId);
+  switch (roomId) {
+    case 1:
+      return v.relation === "vertical"
+        ? `הזוויות קודקודיות — הזווית החסרה שווה לזווית הנתונה (${v.given}°).`
+        : `הזוויות צמודות — חסרו את הזווית הנתונה מ-180°: 180 − ${v.given} = ?`;
+    case 2:
+      if (v.relation === "cointerior")
+        return `זוויות חד-צדדיות בין מקבילים משלימות ל-180°: 180 − ${v.given} = ?`;
+      return `זוויות ${v.relation === "alternate" ? "מתחלפות" : "מתאימות"} בין מקבילים שוות — הזווית החסרה זהה לנתונה (${v.given}°).`;
+    case 3:
+      return `המשולשים חופפים (ז.צ.ז). הזווית המתאימה שווה לזווית הנתונה (${v.given}°).`;
+    case 4:
+      return `במשולשים דומים הזוויות זהות: 180 − ${v.a} − ${v.b} = ?`;
+    default:
+      return "";
+  }
 }
 
 // ---- Timer ----------------------------------------------------------------
@@ -717,9 +861,10 @@ function updateChrome() {
     rail.appendChild(seg);
   }
 
-  // hint button only on puzzle rooms after 3 wrong
+  // hint button only on puzzle rooms after 3 wrong attempts
   const hintBtn = document.getElementById("hintBtn");
-  const canHint = (state.currentRoom >= 1 && state.currentRoom <= 5 && state.wrongAttempts >= 3 && !state.finished);
+  const attempts = (state.currentRoom === 5) ? state.room5Attempts : state.wrongAttempts;
+  const canHint = (state.currentRoom >= 1 && state.currentRoom <= 5 && attempts >= 3 && !state.finished);
   hintBtn.style.display = canHint ? "block" : "none";
 
   updateCodePanel();
@@ -797,72 +942,87 @@ function jumpToRoom(target) {
 
 
 // ---- SVG diagrams ---------------------------------------------------------
-function svgFor(name) {
+function svgFor(name, v) {
+  v = v || {};
   switch (name) {
-    case "room1": return `
+    case "room1": {
+      const given = v.given != null ? v.given : 115;
+      const vertical = v.relation === "vertical";
+      // Two crossing lines intersect near (180,120). Given angle in the top
+      // wedge; the unknown is either the vertical (bottom) or adjacent (right) wedge.
+      const unknown = vertical
+        ? `<path d="M 141 142 A 45 45 0 0 0 219 142" fill="none" stroke="#ff9d3c" stroke-width="2.5"/>
+           <text class="svg-label" x="180" y="166" fill="#ff9d3c" font-size="22" text-anchor="middle">?</text>`
+        : `<path d="M 219 98 A 45 45 0 0 1 219 142" fill="none" stroke="#ff9d3c" stroke-width="2.5"/>
+           <text class="svg-label" x="246" y="126" fill="#ff9d3c" font-size="22" text-anchor="middle">?</text>`;
+      return `
       <svg viewBox="0 0 360 240" width="360" height="240" role="img" aria-label="שני ישרים נחתכים">
         <line x1="40" y1="200" x2="320" y2="40" stroke="#38e1ff" stroke-width="3"/>
         <line x1="40" y1="40" x2="320" y2="200" stroke="#38e1ff" stroke-width="3"/>
-        <!-- given angle: top region (obtuse) -->
         <path d="M 219 98 A 45 45 0 0 0 141 98" fill="none" stroke="#2bff88" stroke-width="2.5"/>
-        <text class="svg-label" x="180" y="90" fill="#2bff88" font-size="18" text-anchor="middle">115°</text>
-        <!-- unknown angle: right region (acute), adjacent / supplementary to 115° -->
-        <path d="M 219 98 A 45 45 0 0 1 219 142" fill="none" stroke="#ff9d3c" stroke-width="2.5"/>
-        <text class="svg-label" x="244" y="126" fill="#ff9d3c" font-size="22" text-anchor="middle">?</text>
+        <text class="svg-label" x="180" y="90" fill="#2bff88" font-size="18" text-anchor="middle">${given}°</text>
+        ${unknown}
         <circle cx="180" cy="120" r="4" fill="#e8eef7"/>
       </svg>`;
-    case "room2": return `
+    }
+    case "room2": {
+      const given = v.given != null ? v.given : 73;
+      return `
       <svg viewBox="0 0 380 240" width="380" height="240" role="img" aria-label="ישרים מקבילים וישר חותך">
         <line x1="20" y1="80" x2="360" y2="80" stroke="#38e1ff" stroke-width="3"/>
         <line x1="20" y1="170" x2="360" y2="170" stroke="#38e1ff" stroke-width="3"/>
         <text class="svg-label" x="350" y="72" fill="#93a1b8" font-size="14">a</text>
         <text class="svg-label" x="350" y="162" fill="#93a1b8" font-size="14">b</text>
         <line x1="110" y1="30" x2="290" y2="220" stroke="#ff9d3c" stroke-width="3"/>
-        <!-- 73°: below upper line, right of transversal -->
-        <text class="svg-label" x="220" y="106" fill="#2bff88" font-size="17" text-anchor="middle">73°</text>
-        <!-- ?: corresponding angle — below lower line, right of transversal -->
+        <text class="svg-label" x="220" y="106" fill="#2bff88" font-size="17" text-anchor="middle">${given}°</text>
         <text class="svg-label" x="295" y="200" fill="#ff9d3c" font-size="22" text-anchor="middle">?</text>
         <circle cx="157" cy="80" r="4" fill="#e8eef7"/>
         <circle cx="243" cy="170" r="4" fill="#e8eef7"/>
       </svg>`;
-    case "room3": return `
-      <svg viewBox="0 0 420 230" width="420" height="230" role="img" aria-label="שני משולשים חופפים">
-        <!-- Triangle 1: B(40,190) C(170,190) A(70,60) -->
-        <polygon points="40,190 170,190 70,60" fill="none" stroke="#38e1ff" stroke-width="3"/>
-        <text class="svg-label" x="34" y="205" fill="#93a1b8" font-size="14">B</text>
-        <text class="svg-label" x="175" y="205" fill="#93a1b8" font-size="14">C</text>
-        <text class="svg-label" x="62" y="52" fill="#93a1b8" font-size="14">A</text>
-        <text class="svg-label" x="78" y="180" fill="#2bff88" font-size="16">48°</text>
-        <!-- side AB tick: perpendicular at midpoint (55,125) -->
-        <line x1="48" y1="123" x2="62" y2="127" stroke="#ff9d3c" stroke-width="2.5"/>
-        <!-- side AC double-tick (different pair) at midpoint (120,125) -->
-        <line x1="114" y1="131" x2="124" y2="124" stroke="#ffd34d" stroke-width="2.5"/>
-        <line x1="118" y1="135" x2="128" y2="128" stroke="#ffd34d" stroke-width="2.5"/>
-        <!-- arc at apex A, between sides AB and AC, inside the triangle -->
-        <path d="M 65.5 79.5 A 20 20 0 0 1 82.2 75.9" fill="none" stroke="#ff4d6d" stroke-width="2.5"/>
-        <!-- Triangle 2: E(250,190) F(380,190) D(280,60) — shifted +210 in x -->
-        <polygon points="250,190 380,190 280,60" fill="none" stroke="#38e1ff" stroke-width="3"/>
-        <text class="svg-label" x="244" y="205" fill="#93a1b8" font-size="14">E</text>
-        <text class="svg-label" x="385" y="205" fill="#93a1b8" font-size="14">F</text>
-        <text class="svg-label" x="272" y="52" fill="#93a1b8" font-size="14">D</text>
-        <text class="svg-label" x="288" y="180" fill="#ff9d3c" font-size="20">?</text>
-        <line x1="258" y1="123" x2="272" y2="127" stroke="#ff9d3c" stroke-width="2.5"/>
-        <line x1="324" y1="131" x2="334" y2="124" stroke="#ffd34d" stroke-width="2.5"/>
-        <line x1="328" y1="135" x2="338" y2="128" stroke="#ffd34d" stroke-width="2.5"/>
-        <path d="M 275.5 79.5 A 20 20 0 0 1 292.2 75.9" fill="none" stroke="#ff4d6d" stroke-width="2.5"/>
+    }
+    case "room3": {
+      const given = v.given != null ? v.given : 48;
+      // Two ASA-congruent triangles. Given base angle at B; the matching base
+      // angle at E is the unknown. Included base (single tick) + second base angle marked.
+      return `
+      <svg viewBox="0 0 440 230" width="440" height="230" role="img" aria-label="שני משולשים חופפים לפי ז.צ.ז">
+        <!-- Triangle 1: B(40,190) C(180,190) A(90,70) -->
+        <polygon points="40,190 180,190 90,70" fill="none" stroke="#38e1ff" stroke-width="3"/>
+        <text class="svg-label" x="32" y="205" fill="#93a1b8" font-size="14">B</text>
+        <text class="svg-label" x="180" y="205" fill="#93a1b8" font-size="14">C</text>
+        <text class="svg-label" x="84" y="62" fill="#93a1b8" font-size="14">A</text>
+        <!-- angle B (given) -->
+        <path d="M 66 190 A 26 26 0 0 0 50 166" fill="none" stroke="#2bff88" stroke-width="2.5"/>
+        <text class="svg-label" x="70" y="178" fill="#2bff88" font-size="15">${given}°</text>
+        <!-- angle C (marked equal) -->
+        <path d="M 154 190 A 26 26 0 0 1 165 170" fill="none" stroke="#ff4d6d" stroke-width="2.5"/>
+        <!-- included base BC single tick at midpoint (110,190) -->
+        <line x1="110" y1="184" x2="110" y2="196" stroke="#ff9d3c" stroke-width="2.5"/>
+        <!-- Triangle 2: E(250,190) F(390,190) D(300,70) — identical, shifted +210 -->
+        <polygon points="250,190 390,190 300,70" fill="none" stroke="#38e1ff" stroke-width="3"/>
+        <text class="svg-label" x="242" y="205" fill="#93a1b8" font-size="14">E</text>
+        <text class="svg-label" x="390" y="205" fill="#93a1b8" font-size="14">F</text>
+        <text class="svg-label" x="294" y="62" fill="#93a1b8" font-size="14">D</text>
+        <path d="M 276 190 A 26 26 0 0 0 260 166" fill="none" stroke="#ff9d3c" stroke-width="2.5"/>
+        <text class="svg-label" x="276" y="178" fill="#ff9d3c" font-size="18">?</text>
+        <path d="M 364 190 A 26 26 0 0 1 375 170" fill="none" stroke="#ff4d6d" stroke-width="2.5"/>
+        <line x1="320" y1="184" x2="320" y2="196" stroke="#ff9d3c" stroke-width="2.5"/>
       </svg>`;
-    case "room4": return `
+    }
+    case "room4": {
+      const a = v.a != null ? v.a : 65;
+      const b = v.b != null ? v.b : 40;
+      return `
       <svg viewBox="0 0 540 290" width="540" height="290" role="img" aria-label="שני משולשים דומים">
-        <!-- small triangle: B(40,240) C(240,240) A(96,119) — base angles 65°,40°, apex 75° -->
         <polygon points="40,240 240,240 96,119" fill="none" stroke="#38e1ff" stroke-width="3"/>
-        <text class="svg-label" x="72" y="230" fill="#ffd34d" font-size="15" text-anchor="middle">65°</text>
-        <text class="svg-label" x="192" y="232" fill="#2bff88" font-size="15" text-anchor="middle">40°</text>
+        <text class="svg-label" x="72" y="230" fill="#ffd34d" font-size="15" text-anchor="middle">${a}°</text>
+        <text class="svg-label" x="192" y="232" fill="#2bff88" font-size="15" text-anchor="middle">${b}°</text>
         <text class="svg-label" x="140" y="272" fill="#93a1b8" font-size="13" text-anchor="middle">משולש קטן</text>
-        <!-- large similar triangle (scale 1.1): B'(290,240) C'(510,240) A'(352,107) -->
         <polygon points="290,240 510,240 352,107" fill="none" stroke="#38e1ff" stroke-width="3"/>
         <text class="svg-label" x="352" y="138" fill="#ff9d3c" font-size="22" text-anchor="middle">?</text>
         <text class="svg-label" x="400" y="272" fill="#93a1b8" font-size="13" text-anchor="middle">משולש גדול</text>
       </svg>`;
+    }
     default: return "";
   }
 }
@@ -878,27 +1038,30 @@ function render() {
 
 function renderIntro() {
   stopTimer();
+  const levelBtns = [1, 2, 3, 4, 5].map((lv) =>
+    `<button class="level-btn" onclick="startGame(${lv})">
+       <span class="lv-num">רמה ${lv}</span>
+       <span class="lv-grade">${LEVEL_GRADES[lv]}</span>
+     </button>`).join("");
   app().innerHTML = `
     <div class="stage intro">
       <div class="big-logo">🔐 הכספת של <span class="euclid">אוקלידס</span></div>
       <div class="tagline">חדר בריחה גיאומטרי</div>
-      <p>ברוכים הבאים, סוכנים. מערכת האבטחה הגיאומטרית ננעלה. כדי לפרוץ את הכספת המרכזית,
-      עליכם לעבור דרך חמישה מתחמי אבטחה.</p>
-      <p>בכל מתחם עליכם <b>לזהות את המבנה</b>, <b>לנמק באמצעות המשפט המתמטי הנכון</b>,
-      ולחשב את <b>קוד הגישה</b> (הזווית החסרה). הטיימר יחל לפעול!</p>
-      <button class="btn big green" onclick="startGame()">▶ התחל פרוטוקול פריצה</button>
-      ${state.collectedCodes.length > 0 || state.currentRoom > 0 ? "" : ""}
+      <p>המשחק כולל נושאים בגיאומטריה מ<b>כיתה ח'</b> (רמות 1–2), <b>כיתה ט'</b> (רמה 3)
+      ו<b>כיתה י'</b> (רמות 4–5).</p>
+      <p>בחרו את הרמה שממנה תרצו להתחיל — המשחק יתחיל מהרמה שבחרתם וימשיך עד פריצת הכספת.
+      בכל מתחם יש <b>לזהות את המבנה</b>, <b>לנמק במשפט הנכון</b> ולחשב את <b>הזווית החסרה</b>.</p>
+      <div class="level-grid">${levelBtns}</div>
     </div>`;
 }
 
-function startGame() {
+function startGame(level) {
   sndClick();
-  state.currentRoom = 1;
+  const lv = Math.min(5, Math.max(1, level || 1));
+  state = freshState();
+  state.startLevel = lv;
+  state.currentRoom = lv;
   state.currentPhase = 1;
-  state.collectedCodes = [];
-  state.wrongAttempts = 0;
-  state.elapsed = 0;
-  state.finished = false;
   save();
   startTimer();
   render();
@@ -907,31 +1070,34 @@ function startGame() {
 function renderPuzzleRoom() {
   if (!timerInterval && !state.finished) startTimer();
   const room = ROOMS[state.currentRoom - 1];
+  const v = curVariant(state.currentRoom);
+  const diagram = `<div class="diagram">${svgFor(room.svg, v)}</div>
+      <div class="diagram-note">האיור להמחשה ואינו בהכרח בקנה מידה</div>`;
   let inner = "";
 
   if (state.currentPhase === 1) {
     inner = `
       <span class="phase-tag">זיהוי מבנה</span>
-      <div class="diagram">${svgFor(room.svg)}</div>
-      <div class="question">${room.phase1.q}</div>
+      ${diagram}
+      <div class="question">${room.structureQ}</div>
       <div class="options" id="opts">
-        ${room.phase1.options.map((o, i) => `<button class="opt" onclick="answerMC(1, ${i})">${o}</button>`).join("")}
+        ${room.structureOptions.map((o, i) => `<button class="opt" onclick="answerMC(1, ${i})">${o}</button>`).join("")}
       </div>
       <div class="feedback" id="fb"></div>`;
   } else if (state.currentPhase === 2) {
     inner = `
       <span class="phase-tag">הסקת נימוק</span>
-      <div class="diagram">${svgFor(room.svg)}</div>
-      <div class="question">${room.phase2.q}</div>
+      ${diagram}
+      <div class="question">${room.relationQ}</div>
       <div class="options" id="opts">
-        ${room.phase2.options.map((o, i) => `<button class="opt" onclick="answerMC(2, ${i})">${o}</button>`).join("")}
+        ${room.relationOptions.map((o, i) => `<button class="opt" onclick="answerMC(2, ${i})">${o}</button>`).join("")}
       </div>
       <div class="feedback" id="fb"></div>`;
   } else {
     inner = `
       <span class="phase-tag">חישוב הזווית</span>
-      <div class="diagram">${svgFor(room.svg)}</div>
-      <div class="question">${room.phase3.q}</div>
+      ${diagram}
+      <div class="question">${room.numericQ}</div>
       <div class="numwrap">
         <input class="num-input" id="numInput" type="number" inputmode="numeric"
                placeholder="___" autocomplete="off" />
@@ -957,9 +1123,12 @@ function renderPuzzleRoom() {
 
 function answerMC(phase, idx) {
   const room = ROOMS[state.currentRoom - 1];
-  const data = phase === 1 ? room.phase1 : room.phase2;
+  const v = curVariant(state.currentRoom);
+  let correct;
+  if (phase === 1) correct = room.structureCorrect;
+  else correct = (room.relationCorrect != null) ? room.relationCorrect : v.relCorrect;
   const btns = document.querySelectorAll("#opts .opt");
-  if (idx === data.correct) {
+  if (idx === correct) {
     sndCorrect();
     btns.forEach((b) => (b.disabled = true));
     btns[idx].classList.add("correct");
@@ -982,6 +1151,7 @@ function answerMC(phase, idx) {
 
 function submitNum() {
   const room = ROOMS[state.currentRoom - 1];
+  const v = curVariant(state.currentRoom);
   const input = document.getElementById("numInput");
   const raw = (input.value || "").toString().replace(/[^\d-]/g, "").trim();
   const fb = document.getElementById("fb");
@@ -991,12 +1161,12 @@ function submitNum() {
     return;
   }
   const val = parseInt(raw, 10);
-  if (val === room.answer) {
+  if (val === v.answer) {
     sndCorrect();
     fb.textContent = "✔ קוד תקין! המנעול נפתח...";
     fb.className = "feedback ok";
     input.disabled = true;
-    state.collectedCodes[state.currentRoom - 1] = room.answer;
+    state.collectedCodes[state.currentRoom - 1] = v.answer;
     resetWrong();
     save();
     setTimeout(() => {
@@ -1016,38 +1186,89 @@ function submitNum() {
 
 function renderRoom5() {
   if (!timerInterval && !state.finished) startTimer();
+  const stmts = ROOM5.statements;
+  if (!Array.isArray(state.room5Sel) || state.room5Sel.length !== stmts.length) {
+    state.room5Sel = stmts.map(() => null);
+  }
+  const revealed = state.room5Revealed;
+  const allCorrect = stmts.every((s, i) => state.room5Sel[i] === s.correct);
+
+  const rows = stmts.map((s, i) => {
+    const sel = state.room5Sel[i];
+    let star = "";
+    if (revealed) {
+      const ok = (sel === s.correct);
+      star = `<span class="r5-star ${ok ? "ok" : "bad"}">${ok ? "★" : "✖"}</span>`;
+    }
+    const dis = revealed ? "disabled" : "";
+    return `
+      <div class="r5-row">
+        <div class="r5-text">${i + 1}. ${s.t} ${star}</div>
+        <div class="r5-btns">
+          <button class="r5-tf ${sel === true ? "sel" : ""}" onclick="setRoom5(${i}, true)" ${dis}>נכון</button>
+          <button class="r5-tf ${sel === false ? "sel" : ""}" onclick="setRoom5(${i}, false)" ${dis}>לא נכון</button>
+        </div>
+      </div>`;
+  }).join("");
+
+  const allAnswered = state.room5Sel.every((x) => x != null);
+  let action;
+  if (revealed && !allCorrect) {
+    action = `<button class="btn big" onclick="retryRoom5()">✏️ תקנו ונסו שוב</button>`;
+  } else {
+    action = `<button class="btn big green" id="r5check" onclick="checkRoom5()" ${(!allAnswered || revealed) ? "disabled" : ""}>בדיקת השילוב ✔</button>`;
+  }
+
   app().innerHTML = `
     <div class="stage">
       <div class="room-title">${ROOM5.title}</div>
       <div class="room-sub">${ROOM5.sub}</div>
-      <div class="hint-box" style="color:var(--cyan);border-color:var(--cyan);background:rgba(56,225,255,.08)">
-        🧪 <b>הציטוט של המדען המבולבל:</b><br/>${ROOM5.scientist}
-      </div>
-      <div class="question" style="margin-top:18px">${ROOM5.q}</div>
-      <div class="options" id="opts">
-        ${ROOM5.options.map((o, i) => `<button class="opt" onclick="answerRoom5(${i})">${o}</button>`).join("")}
-      </div>
+      <div class="question" style="font-size:1.02rem;font-weight:600;line-height:1.6">${ROOM5.intro}</div>
+      <div class="r5-list">${rows}</div>
+      ${action}
       <div class="feedback" id="fb"></div>`;
 }
 
-function answerRoom5(idx) {
-  const btns = document.querySelectorAll("#opts .opt");
-  if (idx === ROOM5.correct) {
+function setRoom5(i, val) {
+  if (state.room5Revealed) return;
+  sndClick();
+  if (!Array.isArray(state.room5Sel) || state.room5Sel.length !== ROOM5.statements.length) {
+    state.room5Sel = ROOM5.statements.map(() => null);
+  }
+  state.room5Sel[i] = val;
+  save();
+  render();
+}
+
+function retryRoom5() {
+  sndClick();
+  state.room5Revealed = false;
+  save();
+  render();
+}
+
+function checkRoom5() {
+  const stmts = ROOM5.statements;
+  if (!state.room5Sel.every((x) => x != null)) return;
+  state.room5Attempts++;
+  state.room5Revealed = true;
+  const allCorrect = stmts.every((s, i) => state.room5Sel[i] === s.correct);
+  save();
+  render();
+  const fb = document.getElementById("fb");
+  if (allCorrect) {
     sndCorrect();
-    btns.forEach((b) => (b.disabled = true));
-    btns[idx].classList.add("correct");
-    resetWrong();
-    save();
-    setTimeout(() => {
-      winGame();
-    }, 700);
+    if (fb) { fb.textContent = "✔ כל הטענות סומנו נכון! הכספת נפתחת..."; fb.className = "feedback ok"; }
+    setTimeout(winGame, 1100);
   } else {
     sndWrong();
-    btns[idx].classList.add("wrong");
-    flashWrong();
-    const fb = document.getElementById("fb");
-    if (fb) { fb.textContent = "זו לא ההבחנה הנכונה. חשבו שוב על משמעות הדמיון."; fb.className = "feedback err"; }
-    setTimeout(() => btns[idx] && btns[idx].classList.remove("wrong"), 600);
+    const card = document.querySelector(".stage");
+    if (card) { card.classList.remove("shake"); void card.offsetWidth; card.classList.add("shake"); }
+    const wrongCount = stmts.filter((s, i) => state.room5Sel[i] !== s.correct).length;
+    if (fb) {
+      fb.textContent = `${wrongCount} טענות סומנו בטעות (מסומנות ב-✖). תקנו ונסו שוב.`;
+      fb.className = "feedback err";
+    }
   }
 }
 
@@ -1063,22 +1284,29 @@ function winGame() {
 
 function renderVictory() {
   document.getElementById("hintBtn").style.display = "none";
+  const codes = state.collectedCodes
+    .filter((c) => c != null)
+    .map((c) => String(c).padStart(2, "0"))
+    .join("");
+  const codeLine = codes
+    ? `<p>הקוד שאספתם: <b style="color:var(--cyan);letter-spacing:4px">${codes}</b></p>`
+    : "";
+  const fromLevel = state.startLevel && state.startLevel > 1
+    ? `<p>התחלתם מרמה ${state.startLevel} והגעתם עד הסוף.</p>` : "";
   app().innerHTML = `
     <div class="stage victory">
       <div class="v-title">🎉 הכספת נפרצה בהצלחה!</div>
-      <p>כל הכבוד, סוכנים. עברתם את כל חמשת מתחמי האבטחה ופתחתם את הכספת של אוקלידס.</p>
+      <p>כל הכבוד! עברתם את כל מתחמי האבטחה ופתחתם את הכספת של אוקלידס.</p>
+      ${fromLevel}
       <div class="v-time">⏱ זמן סופי: ${fmtTime(state.finalTime)}</div>
-      <p>הקוד הסופי: <b style="color:var(--cyan);letter-spacing:4px">${FINAL_CODE}</b></p>
+      ${codeLine}
       <button class="btn big green" onclick="playAgain()">🔄 שחקו שוב</button>
     </div>`;
 }
 
 function playAgain() {
   sndClick();
-  state = {
-    currentRoom: 0, currentPhase: 1, collectedCodes: [],
-    elapsed: 0, wrongAttempts: 0, finished: false, finalTime: 0,
-  };
+  state = freshState();
   save();
   render();
 }
@@ -1086,8 +1314,15 @@ function playAgain() {
 // ---- Hints ----------------------------------------------------------------
 function showHint() {
   let hintText = "";
-  if (state.currentRoom >= 1 && state.currentRoom <= 4) hintText = ROOMS[state.currentRoom - 1].hint;
-  else if (state.currentRoom === 5) hintText = ROOM5.hint;
+  if (state.currentRoom >= 1 && state.currentRoom <= 4) {
+    hintText = roomHint(state.currentRoom);
+  } else if (state.currentRoom === 5) {
+    const wrong = [];
+    ROOM5.statements.forEach((s, i) => { if (state.room5Sel[i] !== s.correct) wrong.push(i + 1); });
+    hintText = wrong.length
+      ? ("בדקו שוב את הסעיפים הבאים: " + wrong.join(", ") + ".")
+      : "כל הסעיפים מסומנים נכון — לחצו על \"בדיקת השילוב\".";
+  }
   if (!hintText) return;
 
   // avoid duplicate hint boxes
