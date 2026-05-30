@@ -1277,8 +1277,11 @@ function winGame() {
   state.finished = true;
   state.finalTime = state.elapsed;
   save();
-  sndVictory();
+  // Render the victory screen and fire confetti regardless of the starting
+  // level (the control panel may be partially empty) and independently of any
+  // audio error, so the celebration always plays on a win.
   render();
+  try { sndVictory(); } catch (e) {}
   launchConfetti();
 }
 
@@ -1342,7 +1345,9 @@ function showHint() {
 // ---- Confetti -------------------------------------------------------------
 function launchConfetti() {
   const canvas = document.getElementById("confetti");
+  if (!canvas) return;
   const ctx = canvas.getContext("2d");
+  if (!ctx) return;
   function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
   resize();
   window.addEventListener("resize", resize);
