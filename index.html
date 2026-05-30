@@ -686,8 +686,8 @@ const ROOM5 = {
   intro: "סמנו לכל טענה אם היא נכונה או לא נכונה. הבדיקה תתבצע רק לאחר סימון כל הטענות. רק שילוב נכון לחלוטין יפרוץ את הכספת.",
   statements: [
     { t: "במלבן כל הצלעות שוות", correct: false },
-    { t: "במשולשים דומים, כל הצלעות שוות", correct: false },
-    { t: "במשולשים דומים כל הזוויות שוות", correct: true },
+    { t: "במשולשים דומים, כל הצלעות המתאימות שוות", correct: false },
+    { t: "במשולשים דומים כל הזוויות המתאימות שוות", correct: true },
     { t: "במשולשים חופפים, היחס בין הצלעות המתאימות הוא 1:1", correct: true },
     { t: "במעוין, האלכסונים שווים זה לזה", correct: false },
     { t: "במקבילית, האלכסונים חוצים זה את זה", correct: true },
@@ -997,7 +997,7 @@ function svgFor(name, v) {
         <text class="svg-label" x="84" y="62" fill="#93a1b8" font-size="14">A</text>
         <!-- angle B (given) -->
         <path d="M 66 190 A 26 26 0 0 0 50 166" fill="none" stroke="#2bff88" stroke-width="2.5"/>
-        <text class="svg-label" x="70" y="178" fill="#2bff88" font-size="15">${given}°</text>
+        <text class="svg-label" x="92" y="174" fill="#2bff88" font-size="15" text-anchor="middle">${given}°</text>
         <!-- angle C (marked equal) -->
         <path d="M 154 190 A 26 26 0 0 1 165 170" fill="none" stroke="#ff4d6d" stroke-width="2.5"/>
         <!-- included base BC single tick at midpoint (110,190) -->
@@ -1008,7 +1008,7 @@ function svgFor(name, v) {
         <text class="svg-label" x="390" y="205" fill="#93a1b8" font-size="14">F</text>
         <text class="svg-label" x="294" y="62" fill="#93a1b8" font-size="14">D</text>
         <path d="M 276 190 A 26 26 0 0 0 260 166" fill="none" stroke="#ff9d3c" stroke-width="2.5"/>
-        <text class="svg-label" x="276" y="178" fill="#ff9d3c" font-size="18">?</text>
+        <text class="svg-label" x="302" y="174" fill="#ff9d3c" font-size="18" text-anchor="middle">?</text>
         <path d="M 364 190 A 26 26 0 0 1 375 170" fill="none" stroke="#ff4d6d" stroke-width="2.5"/>
         <line x1="320" y1="184" x2="320" y2="196" stroke="#ff9d3c" stroke-width="2.5"/>
       </svg>`;
@@ -1023,7 +1023,7 @@ function svgFor(name, v) {
         <text class="svg-label" x="192" y="232" fill="#2bff88" font-size="15" text-anchor="middle">${b}°</text>
         <text class="svg-label" x="140" y="272" fill="#93a1b8" font-size="13" text-anchor="middle">משולש קטן</text>
         <polygon points="290,240 510,240 352,107" fill="none" stroke="#38e1ff" stroke-width="3"/>
-        <text class="svg-label" x="352" y="138" fill="#ff9d3c" font-size="22" text-anchor="middle">?</text>
+        <text class="svg-label" x="352" y="180" fill="#ff9d3c" font-size="22" text-anchor="middle">?</text>
         <text class="svg-label" x="400" y="272" fill="#93a1b8" font-size="13" text-anchor="middle">משולש גדול</text>
       </svg>`;
     }
