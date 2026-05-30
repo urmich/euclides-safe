@@ -895,7 +895,8 @@ function updateCodePanel() {
 
   const sel = getSelected();
 
-  // LED display: one 2-digit slot per selected level, separators between.
+  // LED display: one slot per selected level (digits vary, e.g. 2 or 3),
+  // separators between slots.
   const display = document.getElementById("cpDisplay");
   display.innerHTML = "";
   let filled = 0;
@@ -904,14 +905,14 @@ function updateCodePanel() {
     const has = code != null;
     if (has) filled++;
     const newly = (has && idx >= shownCodes);
-    let two;
-    if (!has) two = "––";
-    else if (typeof code === "number") two = String(code).padStart(2, "0");
-    else two = "✓✓"; // level 5 (maze) solved marker
-    for (let k = 0; k < 2; k++) {
+    let chars;
+    if (!has) chars = "––";                                  // empty placeholder
+    else if (typeof code === "number") chars = String(code); // full code, any length
+    else chars = "✓✓";                                        // level 5 (maze) solved marker
+    for (const ch of chars) {
       const d = document.createElement("span");
       d.className = "cp-digit" + (has ? " on" : "") + (newly ? " pop" : "");
-      d.textContent = two[k];
+      d.textContent = ch;
       display.appendChild(d);
     }
     if (idx < sel.length - 1) {
