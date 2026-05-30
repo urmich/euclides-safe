@@ -197,6 +197,15 @@
   .level-btn:hover { border-color: var(--cyan); transform: translateY(-3px); background: var(--panel); }
   .level-btn .lv-num { font-size: 1.15rem; font-weight: 900; color: var(--cyan); }
   .level-btn .lv-grade { font-size: .8rem; color: var(--text-dim); font-weight: 700; }
+  .level-btn .lv-check {
+    width: 22px; height: 22px; border-radius: 6px;
+    border: 2px solid var(--border); display: flex; align-items: center; justify-content: center;
+    font-size: .8rem; color: #053018; font-weight: 900; background: transparent; line-height: 1;
+  }
+  .level-btn.sel { border-color: var(--green); background: rgba(43,255,136,.08); }
+  .level-btn.sel .lv-check { background: var(--green); border-color: var(--green); }
+  .level-btn.sel .lv-num { color: var(--green); }
+  .start-btn { margin-top: 22px; }
 
   /* Room 5 — true/false list */
   .r5-list { display: grid; gap: 10px; margin: 18px 0 20px; }
@@ -296,6 +305,7 @@
   }
   .btn:hover { transform: translateY(-2px); filter: brightness(1.05); }
   .btn:active { transform: translateY(0); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; filter: none; box-shadow: none; }
   .btn.green { background: linear-gradient(180deg, var(--green), #16c46b); color: #053018; box-shadow: 0 6px 18px rgba(43,255,136,.25); }
   .btn.big { width: 100%; padding: 18px; font-size: 1.2rem; margin-top: 8px; }
 
@@ -695,7 +705,7 @@ const ROOM5 = {
     { t: "במשולש שווה שוקיים זויות הבסיס שוות", correct: true },
     { t: "בטרפז הבסיסים מקבילים", correct: true },
     { t: "בטרפז שווה שוקיים הצלעות מקבילות זו לזו", correct: false },
-    { t: "במשולשים דומים יחס שטחי המשולשים שווה ליחס של היקפי המשולשים", correct: false },
+    { t: "במשולשים דומים יחס שטחי המשולשים שווה ליחס היקפי המשולשים", correct: false },
   ],
 };
 
@@ -710,6 +720,7 @@ function freshState() {
     finished: false,
     finalTime: 0,
     startLevel: 1,       // level the player chose to start from
+    selectedLevels: [],  // levels chosen to play this game (ascending)
     variants: {},        // roomId -> chosen variant index for this play
     room5Sel: [],        // player's true/false marks (bool|null)
     room5Revealed: false,
@@ -852,19 +863,18 @@ function updateChrome() {
   if (state.finished) roomChip.textContent = "הכספת נפרצה";
   else roomChip.textContent = "מתחם " + state.currentRoom;
 
-  // rail: 5 segments (rooms 1-5). Clickable to jump to any room.
+  // rail: one segment per selected level. Clickable to jump between them.
   rail.innerHTML = "";
-  const railLabels = ["חדר 1", "חדר 2", "חדר 3", "חדר 4", "חדר 5"];
-  for (let i = 1; i <= 5; i++) {
+  getSelected().forEach((lv) => {
     const seg = document.createElement("div");
     seg.className = "seg";
-    if (state.finished || i < state.currentRoom) seg.classList.add("done");
-    else if (i === state.currentRoom) seg.classList.add("active");
+    if (state.finished || lv < state.currentRoom) seg.classList.add("done");
+    else if (lv === state.currentRoom) seg.classList.add("active");
     seg.style.cursor = "pointer";
-    seg.title = "מעבר ל" + railLabels[i - 1];
-    seg.addEventListener("click", () => jumpToRoom(i));
+    seg.title = "מעבר לחדר " + lv;
+    seg.addEventListener("click", () => jumpToRoom(lv));
     rail.appendChild(seg);
-  }
+  });
 
   // hint button only on puzzle rooms after 3 wrong attempts
   const hintBtn = document.getElementById("hintBtn");
@@ -883,39 +893,45 @@ function updateCodePanel() {
   panel.style.display = show ? "block" : "none";
   if (!show) { shownCodes = 0; return; }
 
-  const filled = state.collectedCodes.filter((c) => c != null).length;
+  const sel = getSelected();
 
-  // Single-line LED display: 8 digits with separators after every 2.
+  // LED display: one 2-digit slot per selected level, separators between.
   const display = document.getElementById("cpDisplay");
   display.innerHTML = "";
-  for (let i = 0; i < 4; i++) {
-    const code = state.collectedCodes[i];
-    const newly = (code != null && i >= shownCodes);
-    const two = (code != null) ? String(code).padStart(2, "0") : "––";
+  let filled = 0;
+  sel.forEach((lv, idx) => {
+    const code = state.collectedCodes[lv - 1];
+    const has = code != null;
+    if (has) filled++;
+    const newly = (has && idx >= shownCodes);
+    let two;
+    if (!has) two = "––";
+    else if (typeof code === "number") two = String(code).padStart(2, "0");
+    else two = "✓✓"; // level 5 (maze) solved marker
     for (let k = 0; k < 2; k++) {
       const d = document.createElement("span");
-      d.className = "cp-digit" + (code != null ? " on" : "") + (newly ? " pop" : "");
+      d.className = "cp-digit" + (has ? " on" : "") + (newly ? " pop" : "");
       d.textContent = two[k];
       display.appendChild(d);
     }
-    if (i < 3) {
+    if (idx < sel.length - 1) {
       const sep = document.createElement("span");
       sep.className = "cp-sep";
       sep.textContent = "·";
       display.appendChild(sep);
     }
-  }
+  });
   shownCodes = filled;
 
   // Tiny legend under the strip so each pair is associated with its room.
   const legend = document.getElementById("cpLegend");
   legend.innerHTML = "";
-  for (let i = 0; i < 4; i++) {
+  sel.forEach((lv) => {
     const l = document.createElement("span");
-    l.className = "cp-leg" + (state.collectedCodes[i] != null ? " on" : "");
-    l.textContent = "חדר " + (i + 1);
+    l.className = "cp-leg" + (state.collectedCodes[lv - 1] != null ? " on" : "");
+    l.textContent = "חדר " + lv;
     legend.appendChild(l);
-  }
+  });
 }
 
 function flashWrong() {
@@ -935,6 +951,7 @@ function resetWrong() { state.wrongAttempts = 0; }
 // Jump directly to any room (room navigation via the progress rail).
 function jumpToRoom(target) {
   if (target < 1 || target > 5) return;
+  if (!getSelected().includes(target)) return;
   sndClick();
   state.finished = false;
   state.currentRoom = target;
@@ -1043,29 +1060,65 @@ function render() {
 
 function renderIntro() {
   stopTimer();
-  const levelBtns = [1, 2, 3, 4, 5].map((lv) =>
-    `<button class="level-btn" onclick="startGame(${lv})">
+  const sel = Array.isArray(state.selectedLevels) ? state.selectedLevels : [];
+  const levelBtns = [1, 2, 3, 4, 5].map((lv) => {
+    const on = sel.includes(lv);
+    return `<button class="level-btn ${on ? "sel" : ""}" onclick="toggleLevel(${lv})" aria-pressed="${on}">
+       <span class="lv-check">${on ? "✔" : ""}</span>
        <span class="lv-num">רמה ${lv}</span>
        <span class="lv-grade">${LEVEL_GRADES[lv]}</span>
-     </button>`).join("");
+     </button>`;
+  }).join("");
+  const canStart = sel.length > 0;
   app().innerHTML = `
     <div class="stage intro">
       <div class="big-logo">🔐 הכספת של <span class="euclid">אוקלידס</span></div>
       <div class="tagline">חדר בריחה גיאומטרי</div>
-      <p>המשחק כולל נושאים בגיאומטריה מ<b>כיתה ח'</b> (רמות 1–2), <b>כיתה ט'</b> (רמה 3)
+      <p>המשחק כולל נושאים בגיאומטריה מ<b>כיתה ח'</b> (רמות 1–2), <b>כיתות ח'-ט'</b> (רמה 3)
       ו<b>כיתה י'</b> (רמות 4–5).</p>
-      <p>בחרו את הרמה שממנה תרצו להתחיל — המשחק יתחיל מהרמה שבחרתם וימשיך עד פריצת הכספת.
-      בכל מתחם יש <b>לזהות את המבנה</b>, <b>לנמק במשפט הנכון</b> ולחשב את <b>הזווית החסרה</b>.</p>
+      <p>בחרו אילו רמות לשחק (אחת או יותר). המשחק יתחיל מהרמה הנמוכה ביותר וימשיך בסדר עולה,
+      ובסיום כל הרמות שנבחרו תיפרץ הכספת.</p>
       <div class="level-grid">${levelBtns}</div>
+      <button class="btn big green start-btn" id="startBtn" onclick="startSelectedGame()" ${canStart ? "" : "disabled"}>התחל ▶</button>
     </div>`;
 }
 
-function startGame(level) {
+// Toggle a level on the intro selection screen.
+function toggleLevel(lv) {
   sndClick();
-  const lv = Math.min(5, Math.max(1, level || 1));
+  if (!Array.isArray(state.selectedLevels)) state.selectedLevels = [];
+  const i = state.selectedLevels.indexOf(lv);
+  if (i >= 0) state.selectedLevels.splice(i, 1);
+  else state.selectedLevels.push(lv);
+  state.selectedLevels.sort((a, b) => a - b);
+  save();
+  render();
+}
+
+// The levels chosen for this game, ascending. Falls back to a contiguous
+// range from startLevel for legacy saves that predate selection.
+function getSelected() {
+  if (Array.isArray(state.selectedLevels) && state.selectedLevels.length) return state.selectedLevels;
+  const out = [];
+  for (let i = (state.startLevel || 1); i <= 5; i++) out.push(i);
+  return out;
+}
+
+// Smallest selected level greater than `current`, or null if none remain.
+function nextSelectedRoom(current) {
+  const sel = getSelected();
+  for (const lv of sel) if (lv > current) return lv;
+  return null;
+}
+
+function startSelectedGame() {
+  const sel = (state.selectedLevels || []).slice().sort((a, b) => a - b);
+  if (!sel.length) return;
+  sndClick();
   state = freshState();
-  state.startLevel = lv;
-  state.currentRoom = lv;
+  state.selectedLevels = sel;
+  state.startLevel = sel[0];
+  state.currentRoom = sel[0];
   state.currentPhase = 1;
   save();
   startTimer();
@@ -1175,10 +1228,15 @@ function submitNum() {
     resetWrong();
     save();
     setTimeout(() => {
-      state.currentRoom++;
-      state.currentPhase = 1;
-      save();
-      render();
+      const next = nextSelectedRoom(state.currentRoom);
+      if (next == null) {
+        winGame();
+      } else {
+        state.currentRoom = next;
+        state.currentPhase = 1;
+        save();
+        render();
+      }
     }, 850);
   } else {
     sndWrong();
@@ -1283,6 +1341,8 @@ function checkRoom5() {
   if (allCorrect) {
     sndCorrect();
     if (fb) { fb.textContent = "✔ כל הטענות סומנו נכון! הכספת נפתחת..."; fb.className = "feedback ok"; }
+    state.collectedCodes[4] = "✓"; // mark level 5 solved in the control panel
+    save();
     setTimeout(winGame, 1100);
   } else {
     sndWrong();
@@ -1312,7 +1372,7 @@ function winGame() {
 function renderVictory() {
   document.getElementById("hintBtn").style.display = "none";
   const codes = state.collectedCodes
-    .filter((c) => c != null)
+    .filter((c) => typeof c === "number")
     .map((c) => String(c).padStart(2, "0"))
     .join("");
   const codeLine = codes
